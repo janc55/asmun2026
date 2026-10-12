@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: asmun_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-asmun_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-asmun_secure_password}
+      POSTGRES_DB: ${DB_NAME:-asmun_db}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-asmun_user} -d ${DB_NAME:-asmun_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

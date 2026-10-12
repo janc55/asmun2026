@@ -1,0 +1,16 @@
+# Finales de línea
+#
+# El repositorio guarda LF y se comprueba con LF en cualquier sistema: los
+# contenedores Linux lo exigen (un entrypoint .sh con CRLF falla con
+# "exec format error") y así el mismo archivo no cambia según quién lo edite.
+* text=auto eol=lf
+
+# Archivos binarios: sin conversión
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.woff binary
+*.woff2 binary
