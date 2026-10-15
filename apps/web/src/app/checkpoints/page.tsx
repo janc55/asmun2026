@@ -27,7 +27,7 @@ import { OperatorAssignments } from '../../features/users/OperatorAssignments';
 
 const STATUS_STYLES: Record<CheckpointStatusLabel, string> = {
   abierto: 'bg-green-50 text-green-700 border-green-200',
-  programado: 'bg-blue-50 text-blue-700 border-blue-200',
+  programado: 'bg-primary-50 text-primary-700 border-primary-200',
   finalizado: 'bg-gray-100 text-gray-600 border-gray-300',
   desactivado: 'bg-amber-50 text-amber-700 border-amber-200',
 };
@@ -295,7 +295,7 @@ export default function CheckpointsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {grouped.map(([day, items]) => (
                       <React.Fragment key={day}>
-                        <tr className="bg-slate-50">
+                        <tr className="bg-plomo-50">
                           <td colSpan={canManage ? 7 : 6} className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                             {day === today ? `${day} · hoy` : day}
                           </td>

@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../../context/auth-context';
-import { ShieldCheck, LogIn, AlertCircle } from 'lucide-react';
+import { BrandLogo } from '../../components/ui/BrandLogo';
+import { LogIn, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -31,24 +32,25 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-50 to-slate-100">
+    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gradient-to-b from-primary-600 via-primary-700 to-primary-800">
       <div className="sm:mx-auto sm:w-full sm:max-w-md px-4">
-        {/* Logo y encabezado */}
+        {/* Logo del colegio sobre una placa blanca para que se lea en el fondo azul */}
         <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary-700 to-primary-500 flex items-center justify-center text-white shadow-lg shadow-primary-500/30">
-            <ShieldCheck className="w-9 h-9" />
+          <div className="inline-flex items-center justify-center bg-white rounded-2xl px-6 py-4 shadow-xl ring-1 ring-white/20">
+            <BrandLogo size="lg" imageClassName="h-14" />
           </div>
         </div>
-        <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
+
+        <h2 className="mt-5 text-center text-3xl font-extrabold text-white tracking-tight">
           ASMUN Control
         </h2>
-        <p className="mt-1 text-center text-sm text-gray-600">
+        <p className="mt-1 text-center text-sm text-white/75">
           Colegio Americano de Oruro · Modelo de Naciones Unidas
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-white py-8 px-6 shadow-xl shadow-slate-200/50 rounded-2xl sm:px-10 border border-gray-100">
+        <div className="bg-white py-8 px-6 shadow-2xl shadow-primary-900/40 rounded-2xl sm:px-10 border border-plomo-200">
           <form className="space-y-5" onSubmit={handleSubmit}>
             {error && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start space-x-2">

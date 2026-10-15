@@ -3,8 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* Azul y plomo institucionales del colegio. */
+  --brand: #13193b;
+  --plomo: #676767;
+  --background: #f0f0f0;
+  --foreground: #212121;
 }
 
 body {
@@ -14,21 +17,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar styles */
+::selection {
+  background-color: var(--brand);
+  color: #ffffff;
+}
+
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #e0e0e0;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #9e9e9e;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--plomo);
+}
+
+/* La barra superior oscura necesita su propio scrollbar si desborda. */
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
 }

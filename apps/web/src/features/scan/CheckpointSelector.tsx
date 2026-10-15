@@ -8,7 +8,7 @@ import { checkpointTypeLabel, Checkpoint, CheckpointStatusLabel } from '../check
 
 const STATUS_CHIP: Record<CheckpointStatusLabel, string> = {
   abierto: 'bg-green-50 text-green-700 border-green-200',
-  programado: 'bg-blue-50 text-blue-700 border-blue-200',
+  programado: 'bg-primary-50 text-primary-700 border-primary-200',
   finalizado: 'bg-gray-100 text-gray-600 border-gray-300',
   desactivado: 'bg-amber-50 text-amber-700 border-amber-200',
 };

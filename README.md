@@ -36,8 +36,43 @@ asmun-control/
 │   │   └── src/                    # Módulos: auth, participants, badges, scans, dashboard, reports, audit
 │   └── web/                        # Frontend Next.js 15 (App Router)
 │       ├── Dockerfile              # Multi-stage alpine standalone
+│       ├── public/                 # Imágenes de marca: logo-asmun.png e icono-asmun.png
 │       └── src/                    # Rutas, escáner móvil, componentes y vistas
 ```
+
+---
+
+## 🎨 Identidad visual (logo, icono y colores)
+
+### Imágenes de marca
+
+Deje los dos archivos en **`apps/web/public/`** (esa carpeta se publica tal cual en la raíz del sitio):
+
+| Archivo | Uso | Formato recomendado |
+|---|---|---|
+| `apps/web/public/logo-asmun.png` | Logo del colegio en la barra superior y en la pantalla de acceso | PNG con fondo transparente, alto ≥ 200 px (se muestra a 28 px de alto en la barra y 56 px en el acceso) |
+| `apps/web/public/icono-asmun.png` | Icono del sitio / favorito de la pestaña | PNG cuadrado de 512 × 512 px |
+
+* Ambos se toman **sin cambiar código**: el logo se lee de `/logo-asmun.png` y el icono está declarado en `apps/web/src/app/layout.tsx`.
+* Si un archivo todavía no existe, la interfaz **no se rompe**: el logo muestra un monograma con los colores institucionales y el navegador solo recibe un 404 en el icono.
+* En la barra superior y en el acceso el logo se coloca sobre una placa blanca, así se lee igual si el logo es oscuro o claro.
+* Alternativa para el icono: si prefiere el mecanismo automático de Next.js, coloque el archivo como `apps/web/src/app/icon.png` y quite el bloque `icons` del layout.
+
+> Nota: las credenciales impresas y los reportes mantienen los colores por rol definidos en el SDD (10.2) para que cada rol siga siendo distinguible.
+
+### Paleta
+
+Definida en `apps/web/tailwind.config.ts`:
+
+| Token | Valor | Uso |
+|---|---|---|
+| `primary-600` | `#13193B` | Azul institucional: barra superior, botones, enlaces y encabezados |
+| `primary-700` | `#0E1330` | Estados hover/activos |
+| `primary-50` | `#F2F3F8` | Fondos suaves azules |
+| `plomo-600` / `gray-600` | `#676767` | Plomo institucional: textos secundarios y bordes |
+| `plomo-100` / `gray-100` | `#F0F0F0` | Fondo general de la aplicación |
+| `gray-900` | `#212121` | Texto principal |
+| `status.ok` / `warning` / `error` | `#16A34A` / `#F59E0B` / `#DC2626` | Solo resultados de escaneo (siempre con ícono y texto, nunca solo color) |
 
 ---
 

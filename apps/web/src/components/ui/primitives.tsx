@@ -154,7 +154,7 @@ export function Field({
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn('bg-white rounded-2xl border border-gray-200 shadow-sm', className)}>{children}</div>
+    <div className={cn('bg-white rounded-2xl border border-gray-200 shadow-card', className)}>{children}</div>
   );
 }
 

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/navigation';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../context/auth-context';
+import { BrandLogo } from '../ui/BrandLogo';
 import {
   QrCode,
   Users,
@@ -15,6 +16,14 @@ import {
   Menu,
   X,
 } from 'lucide-react';
+
+/** Punto de color por rol dentro de la barra oscura (mismo código que las fichas). */
+const ROLE_DOT: Record<string, string> = {
+  admin: 'bg-violet-400',
+  registrador: 'bg-sky-400',
+  operador: 'bg-emerald-400',
+  lector: 'bg-amber-400',
+};
 
 export function Navbar() {
   const { user, logout, hasRole } = useAuth();
@@ -65,89 +74,76 @@ export function Navbar() {
   ];
 
   const filteredNavItems = navItems.filter((item) => item.show);
-
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'registrador':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'operador':
-        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'lector':
-        return 'bg-amber-100 text-amber-700 border-amber-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
+  const rolePill = (extra = '') => (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full font-medium bg-white/10 text-white border border-white/20 uppercase tracking-wider ${extra}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${ROLE_DOT[user.role] ?? 'bg-white/70'}`} />
+      {user.role}
+    </span>
+  );
 
   return (
-    <nav className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+    <nav className="sticky top-0 z-40 bg-primary-600 border-b border-white/10 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          {/* Logo & Brand */}
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-primary-700 to-primary-500 text-white font-bold text-lg shadow-md">
-              A
-            </div>
-            <div>
-              <span className="text-lg font-bold text-gray-900 tracking-tight">ASMUN</span>
-              <span className="ml-1 text-xs px-2 py-0.5 rounded-full font-medium bg-primary-50 text-primary-700 border border-primary-100">
+          {/* Logo y nombre del sistema */}
+          <Link href="/dashboard" className="flex items-center gap-3 shrink-0">
+            {/* Placa blanca: el logo del colegio puede ser oscuro y la barra es azul. */}
+            <span className="inline-flex items-center justify-center bg-white rounded-lg px-1.5 py-1 shadow-sm">
+              <BrandLogo size="sm" imageClassName="h-7" />
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="text-lg font-bold text-white tracking-tight">ASMUN</span>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/10 text-white border border-white/20">
                 Control
               </span>
-            </div>
-          </div>
+            </span>
+          </Link>
 
-          {/* Desktop Nav Items */}
+          {/* Navegación de escritorio */}
           <div className="hidden md:flex items-center space-x-1">
             {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname.startsWith(item.href);
               return (
-                <a
+                <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center px-3 py-2 rounded-lg text-sm transition-colors ${
                     isActive
-                      ? 'bg-primary-50 text-primary-700 font-semibold'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      ? 'bg-white text-primary-700 font-semibold shadow-sm'
+                      : 'text-white/75 font-medium hover:text-white hover:bg-white/10'
                   }`}
                 >
                   <Icon className="w-4 h-4 mr-2" />
                   {item.label}
-                </a>
+                </Link>
               );
             })}
           </div>
 
-          {/* User profile & Logout */}
+          {/* Usuario y cierre de sesión */}
           <div className="hidden md:flex items-center space-x-4">
             <div className="text-right">
-              <div className="text-sm font-semibold text-gray-900 leading-tight">
-                {user.fullName}
-              </div>
-              <span
-                className={`inline-block text-[11px] px-2 py-0.5 mt-0.5 rounded-full font-medium border uppercase tracking-wider ${getRoleBadgeColor(
-                  user.role,
-                )}`}
-              >
-                {user.role}
-              </span>
+              <div className="text-sm font-semibold text-white leading-tight">{user.fullName}</div>
+              {rolePill('mt-0.5')}
             </div>
             <button
               onClick={logout}
               title="Cerrar sesión"
-              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-2 text-white/75 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
               <LogOut className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Mobile menu button */}
+          {/* Botón de menú móvil */}
           <div className="flex items-center md:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              aria-label="Menú"
+              className="p-2 rounded-md text-white/80 hover:text-white hover:bg-white/10"
             >
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -155,37 +151,31 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile menu dropdown */}
+      {/* Menú móvil */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white px-4 pt-2 pb-4 space-y-1">
-          <div className="px-3 py-2 border-b border-gray-100 mb-2">
-            <div className="font-semibold text-gray-900">{user.fullName}</div>
-            <span
-              className={`inline-block text-[11px] px-2 py-0.5 mt-1 rounded-full font-medium border uppercase tracking-wider ${getRoleBadgeColor(
-                user.role,
-              )}`}
-            >
-              {user.role}
-            </span>
+        <div className="md:hidden border-t border-white/10 bg-primary-700 px-4 pt-2 pb-4 space-y-1">
+          <div className="px-3 py-2 border-b border-white/10 mb-2">
+            <div className="font-semibold text-white">{user.fullName}</div>
+            {rolePill('mt-1')}
           </div>
 
           {filteredNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname.startsWith(item.href);
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center px-3 py-2.5 rounded-lg text-base font-medium ${
+                className={`flex items-center px-3 py-2.5 rounded-lg text-base ${
                   isActive
-                    ? 'bg-primary-50 text-primary-700 font-semibold'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-white text-primary-700 font-semibold'
+                    : 'text-white/80 font-medium hover:bg-white/10'
                 }`}
               >
                 <Icon className="w-5 h-5 mr-3" />
                 {item.label}
-              </a>
+              </Link>
             );
           })}
 
@@ -194,7 +184,7 @@ export function Navbar() {
               setIsMobileMenuOpen(false);
               logout();
             }}
-            className="w-full flex items-center px-3 py-2.5 text-base font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-2"
+            className="w-full flex items-center px-3 py-2.5 text-base font-medium text-red-200 hover:bg-white/10 rounded-lg transition-colors mt-2"
           >
             <LogOut className="w-5 h-5 mr-3" />
             Cerrar sesión
