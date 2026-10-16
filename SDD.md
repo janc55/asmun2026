@@ -370,16 +370,20 @@ Solo un `admin` puede autorizar una excepción (por ejemplo, entregar almuerzo f
 
 ### 10.2 Paleta de colores
 
-| Token | Uso | Valor sugerido |
+| Token | Uso | Valor |
 |---|---|---|
-| `primary-600` | Azul principal: botones, enlaces, encabezados | `#1D4ED8` |
-| `primary-700` | Hover / activo | `#1E40AF` |
-| `primary-50` | Fondos suaves azules | `#EFF6FF` |
-| `gray-900` | Texto principal | `#1F2937` |
-| `gray-600` | Texto secundario | `#4B5563` |
-| `gray-200` | Bordes y divisores | `#E5E7EB` |
-| `gray-100` | Fondo de tarjetas / secciones | `#F3F4F6` |
-| `white` | Fondo base | `#FFFFFF` |
+| `primary-600` | Azul institucional: barra superior, botones, enlaces, encabezados | `#13193B` |
+| `primary-700` | Hover / activo | `#0E1330` |
+| `primary-50` | Fondos suaves azules | `#F2F3F8` |
+| `gray-900` | Texto principal | `#212121` |
+| `gray-600` / `plomo-600` | Texto secundario (plomo institucional) | `#676767` |
+| `gray-200` | Bordes y divisores | `#E0E0E0` |
+| `gray-100` / `plomo-100` | Fondo general de la aplicación | `#F0F0F0` |
+| `white` | Fondo base de tarjetas | `#FFFFFF` |
+
+El azul `#13193B` y el plomo `#676767` son los colores institucionales del Colegio Americano de Oruro; la escala completa (con sus variantes claras y oscuras) está en `apps/web/tailwind.config.ts`.
+
+**Imágenes de marca:** el logo y el icono del colegio se colocan en `apps/web/public/` (`logo-asmun.png` e `icono-asmun.png`); el detalle está en el `README.md`. Si el archivo del logo no existe, la interfaz muestra un monograma con el azul institucional.
 
 Se pueden usar degradados para mejorar el diseño.
 

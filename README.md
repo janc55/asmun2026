@@ -58,6 +58,18 @@ Deje los dos archivos en **`apps/web/public/`** (esa carpeta se publica tal cual
 * En la barra superior y en el acceso el logo se coloca sobre una placa blanca, así se lee igual si el logo es oscuro o claro.
 * Alternativa para el icono: si prefiere el mecanismo automático de Next.js, coloque el archivo como `apps/web/src/app/icon.png` y quite el bloque `icons` del layout.
 
+### Credencial impresa (imagen de fondo)
+
+La credencial en PDF toma su diseño de una imagen de fondo que **ya viene en el repositorio**:
+
+| Archivo | Uso | Formato |
+|---|---|---|
+| `apps/api/src/assets/fondo-credencial.png` | Fondo de cada credencial (tarjeta de 7,5 × 10,5 cm) | PNG vertical de 886 × 1240 px (300 dpi). También se aceptan `.jpg`/`.jpeg` **baseline** |
+
+* Para cambiar el diseño, sobrescriba ese archivo: `apps/api/nest-cli.json` lo copia a `dist/assets/` al compilar, y la imagen Docker de la API copia `dist/`, así que el fondo también viaja a producción.
+* Si el archivo no existe, la credencial se genera igual con las franjas de color de respaldo y el log lo avisa: **la impresión nunca falla**.
+* No use JPEG progresivo: los visores de PDF no lo decodifican y el servicio lo descarta con un aviso.
+
 > Nota: las credenciales impresas y los reportes mantienen los colores por rol definidos en el SDD (10.2) para que cada rol siga siendo distinguible.
 
 ### Paleta
