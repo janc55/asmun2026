@@ -1,6 +1,6 @@
 import type { ParticipantRole } from './types';
 
-/** Colores por rol del SDD 10.2 (los mismos de la credencial impresa). */
+/** Colores por rol del SDD 10.2 (chips de la interfaz; la credencial usa el azul del fondo). */
 export const ROLE_OPTIONS: Array<{ value: ParticipantRole; label: string; color: string }> = [
   { value: 'delegado', label: 'Delegado', color: '#1D4ED8' },
   { value: 'docente', label: 'Docente', color: '#0F766E' },

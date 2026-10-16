@@ -10,7 +10,7 @@
 
 ASMUN Control es una plataforma integral diseñada para la gestión operativa en tiempo real del evento ASMUN (~200 participantes, 4 días de duración):
 * **Acreditación & Participantes:** Registro manual en sitio, importación masiva resiliente desde Excel/CSV con tolerancia a encabezados y filtros avanzados.
-* **Credenciales Imprimibles:** Generación en servidor de PDF (tarjetas de 9 × 13 cm, 4 por hoja A4 con marcas de corte), QR de solo 6 caracteres sin datos sensibles, códigos cortos de alta legibilidad (`K7P-3Q9`) y franja de color según rol.
+* **Credenciales Imprimibles:** Generación en servidor de PDF (tarjetas de 7.5 × 10.5 cm, 4 por hoja A4 con marcas de corte) con fondo de marca de agua, QR de solo 6 caracteres sin datos sensibles sobre placa blanca y códigos cortos de alta legibilidad (`K7P-3Q9`).
 * **Control de Acceso y Comidas:** Validación en 6 pasos en tiempo real (< 1 s) en puntos de ingreso, credencial, material, refrigerios y almuerzos.
 * **Concurrencia ACID:** Garantía a nivel de base de datos (`ux_scan_once`) que imposibilita el doble registro ante escaneos simultáneos sin emitir errores al operador.
 * **Panel en Tiempo Real:** Polling automático cada 5 s con métricas de esperados vs. registrados, ausentes por punto y exportación inmediata a XLSX.

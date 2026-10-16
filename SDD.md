@@ -90,7 +90,7 @@ Ingreso, refrigerio, almuerzo, entrega de credencial y entrega de material **no 
 ### 3.2 Credencialización
 - **RF-05** Generar código corto único por participante al crearlo.
 - **RF-06** Generar credenciales en PDF (individual, por colegio o todas), varias por hoja.
-- **RF-07** Color por rol para identificación visual rápida.
+- **RF-07** Color por rol para identificación visual rápida (chips de la interfaz; la credencial usa la franja azul del diseño).
 - **RF-08** Reimpresión de credencial por pérdida, con registro de la reimpresión.
 
 ### 3.3 Control
@@ -385,7 +385,7 @@ Se pueden usar degradados para mejorar el diseño.
 
 **Colores de estado (solo para resultados de escaneo):** verde `#16A34A`, amarillo `#F59E0B`, rojo `#DC2626`.
 
-**Colores por rol en la credencial** (franja inferior):
+**Colores por rol** (chips de la interfaz; la franja de la credencial es fija, azul del diseño):
 
 | Rol | Color |
 |---|---|
@@ -420,15 +420,15 @@ Se pueden usar degradados para mejorar el diseño.
 
 ## 11. Credencial
 
-- **Formato:** tarjeta de 9 × 13 cm (vertical) para portagafete estándar; ajustable. En hoja A4: 4 por página con marcas de corte.
+- **Formato:** tarjeta de 7.5 × 10.5 cm (vertical); ajustable. En hoja A4: 4 por página con marcas de corte.
 - **Sin foto.**
-- **Contenido:**
-  - Logo ASMUN y nombre del evento.
-  - **Nombre y apellido** (grande).
-  - Foro (comité).
-  - Cargo (solo quienes lo tienen).
-  - **Rol** con franja de color.
-  - **QR** (cuadrado de ≥ 2.5 cm) y debajo el **código corto** (`K7P-3Q9`) en tipografía monoespaciada y grande.
+- **Fondo:** imagen única `apps/api/src/assets/fondo-credencial.png` (886 × 1240 px, 300 dpi) con franja superior "ASMUN 2026 / AMERICAN SCHOOL" + logo, marca de agua de mapa del mundo, escudo del colegio y franja inferior azul.
+- **Contenido superpuesto al fondo:**
+  - **Comité** (gris `#4B5563`).
+  - **Nombre completo** (grande, azul institucional `#13134F`).
+  - **País** (gris).
+  - **Cargo** (blanco, centrado en la franja inferior a la derecha del escudo; solo quienes lo tienen).
+  - **QR** (3.3 cm, código corto de 6 caracteres) sobre **placa blanca con esquinas redondeadas** para no confundirse con la marca de agua.
 - **No se imprimen datos sensibles** (documento, alergias).
 - **Reimpresión:** conserva el mismo código y queda registrada en `audit_log`.
 

@@ -46,7 +46,7 @@ flowchart LR
   - Catálogos de `schools` y `committees`.
   - Generador criptográfico de códigos cortos de 6 caracteres del alfabeto `23456789ABCDEFGHJKMNPQRSTVWXYZ`.
   - Importador con `exceljs`: parser tolerante a variaciones de encabezados de colegios, validación fila por fila con vista previa y reporte de discrepancias.
-  - Endpoint y módulo de PDF con `pdf-lib` + `qrcode`: tarjetas 9 × 13 cm verticales (4 por página A4 con marcas de corte), franja de color por rol, código visual `XXX-XXX` y QR nítido.
+  - Endpoint y módulo de PDF con `pdf-lib` + `qrcode`: tarjetas 7.5 × 10.5 cm verticales (4 por página A4 con marcas de corte) con fondo de marca de agua, etiquetas de comité/nombre/país/cargo y QR nítido sobre placa blanca.
   - Vistas Next.js: tabla con filtros por colegio/rol, modal de registro rápido en sitio e impresión individual o por lote.
 
 ### Fase 3: Motor de Control, Escaneo Móvil y Validación

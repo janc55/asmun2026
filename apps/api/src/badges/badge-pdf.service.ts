@@ -1,19 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ParticipantRole } from '@prisma/client';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 import * as QRCode from 'qrcode';
-import { formatShortCode } from '../common/utils/code-generator.util';
 import {
   A4_HEIGHT,
   A4_WIDTH,
   CARDS_PER_PAGE,
   CARD_HEIGHT,
+  CARD_NAVY,
   CARD_WIDTH,
   GAP_X,
   GAP_Y,
+  LABEL_GRAY,
+  QR_PLATE_BORDER,
   hexToRgb,
-  roleColor,
-  roleLabel,
 } from './badge.constants';
 
 /** Lo mínimo que la credencial necesita de un participante. */
@@ -41,9 +43,43 @@ export interface RenderOptions {
 }
 
 const MARGIN_SIDE = 16;
-const BAND_HEIGHT = 46;
-const FOOTER_HEIGHT = 26;
-const QR_SIZE = 96;
+
+/** QR de 3.3 cm (área negra ~2.8 cm tras el margen de silencio) ≥ 2.5 cm (SDD). */
+const QR_SIZE = 94;
+const QR_PADDING = 5;
+const QR_RADIUS = 6;
+
+/** Resolución del PNG del QR: ~240 dpi sobre 94 pt, más que suficiente. */
+const QR_PIXELS = 320;
+
+/**
+ * Alturas de las franjas del fondo (medidas sobre assets/fondo-credencial.png,
+ * 886 × 1240 px) usadas solo como respaldo si el archivo no existe.
+ */
+const FALLBACK_HEADER = 41.3;
+const FALLBACK_FOOTER = 28.6;
+
+/**
+ * Coordenadas verticales de cada etiqueta, en pt desde el borde inferior de la
+ * tarjeta (297.6 pt). Calibradas contra el fondo: la franja superior termina a
+ * 256.3 pt, la inferior empieza a 28.6 pt y la placa del QR va de 41 a 145 pt.
+ */
+const COMMITTEE_Y = 228;
+const NAME_Y = 196;
+const COUNTRY_Y = 167;
+const QR_BOTTOM_Y = 46;
+const POSITION_Y = 10;
+
+/**
+ * El cargo se centra en la zona de la franja inferior libre del escudo del
+ * colegio (el escudo ocupa hasta 38 pt del borde izquierdo), igual que en el
+ * diseño de referencia.
+ */
+const POSITION_REGION_X = 46;
+const POSITION_REGION_WIDTH = CARD_WIDTH - POSITION_REGION_X - MARGIN_SIDE;
+
+/** Nombre de los archivos de fondo, en orden de preferencia. */
+const BACKGROUND_FILES = ['fondo-credencial.png', 'fondo-credencial.jpg', 'fondo-credencial.jpeg'];
 
 /** Color de pdf-lib a partir de un hex del SDD. */
 function pdfColor(hex: string) {
@@ -51,15 +87,38 @@ function pdfColor(hex: string) {
   return rgb(color.r, color.g, color.b);
 }
 
+/** PNG: firma `89 50 4E 47`. */
+function isPng(bytes: Buffer): boolean {
+  return (
+    bytes.length > 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  );
+}
+
 /**
- * Resolución del PNG del QR.
- *
- * El QR impreso mide 96 pt (3.4 cm) y el código de 6 caracteres produce un QR de
- * 21×21 módulos, así que 320 px equivalen a ~240 dpi: más que suficiente para
- * leerlo con la cámara. Subirlo a 512 px multiplica por ~2.5 el tiempo del lote
- * de 200 credenciales sin ganancia visible en la impresión.
+ * JPEG *baseline* (`FFC0`): los visores PDF no decodifican JPEG progresivo
+ * (`FFC2`), así que se descarta con un aviso en lugar de fallar el lote.
  */
-const QR_PIXELS = 320;
+function isBaselineJpeg(bytes: Buffer): boolean {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) return false;
+  let offset = 2;
+  while (offset + 3 < bytes.length) {
+    if (bytes[offset] !== 0xff) return false;
+    const marker = bytes[offset + 1];
+    if (marker === 0xc0) return true;
+    if (marker === 0xc2) return false;
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      offset += 2;
+      continue;
+    }
+    const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
+    offset += 2 + length;
+  }
+  return false;
+}
 
 /** Fuentes base (WinAnsi): cubren el español sin incrustar archivos de fuente. */
 interface FontSet {
@@ -67,6 +126,12 @@ interface FontSet {
   bold: PDFFont;
   italic: PDFFont;
   mono: PDFFont;
+}
+
+interface PlateStyle {
+  color?: any;
+  borderColor?: any;
+  borderWidth?: number;
 }
 
 @Injectable()
@@ -102,13 +167,23 @@ export class BadgePdfService {
       qrImages.set(code, await pdf.embedPng(png));
     }
 
+    // El fondo se incrusta una sola vez por documento y se reutiliza en todas
+    // las tarjetas: el PDF crece una vez, sin importar el tamaño del lote.
+    const background = await this.embedBackground(pdf);
+
     if (options.sheet === 'card') {
       for (const participant of participants) {
         const page = pdf.addPage([CARD_WIDTH, CARD_HEIGHT]);
-        this.drawCard(page, { x: 0, y: 0 }, participant, fonts, qrImages, options.event, {
-          cropMarks: false,
-          border: false,
-        });
+        this.drawCard(
+          page,
+          { x: 0, y: 0 },
+          participant,
+          fonts,
+          qrImages,
+          background,
+          options.event,
+          { cropMarks: false, border: false },
+        );
       }
     } else {
       for (let index = 0; index < participants.length; index += CARDS_PER_PAGE) {
@@ -122,7 +197,7 @@ export class BadgePdfService {
           // Fila 0 arriba: se calcula desde el borde superior de la hoja.
           const y = A4_HEIGHT - GAP_Y - CARD_HEIGHT - row * (CARD_HEIGHT + GAP_Y);
 
-          this.drawCard(page, { x, y }, participant, fonts, qrImages, options.event, {
+          this.drawCard(page, { x, y }, participant, fonts, qrImages, background, options.event, {
             cropMarks: true,
             border: true,
           });
@@ -132,6 +207,43 @@ export class BadgePdfService {
 
     const bytes = await pdf.save();
     return Buffer.from(bytes);
+  }
+
+  /**
+   * Incrusta `assets/fondo-credencial.*`. Si no existe o el formato no es
+   * soportado se registra un aviso y la credencial se dibuja en respaldo
+   * (franjas macizas), sin romper el lote de impresión.
+   */
+  private async embedBackground(pdf: PDFDocument): Promise<PDFImage | null> {
+    for (const file of BACKGROUND_FILES) {
+      // `dist/badges/../assets` según el layout de salida de tsc, y
+      // `dist/src/badges/../../assets` cuando la raíz común es `apps/api`.
+      const candidates = [
+        join(__dirname, '..', 'assets', file),
+        join(__dirname, '..', '..', 'assets', file),
+      ];
+
+      for (const path of candidates) {
+        // eslint-disable-next-line no-await-in-loop -- se prueba un archivo por vez
+        const bytes = await readFile(path).catch(() => null);
+        if (!bytes) continue;
+
+        try {
+          if (isPng(bytes)) return await pdf.embedPng(bytes);
+          if (isBaselineJpeg(bytes)) return await pdf.embedJpg(bytes);
+          this.logger.warn(
+            `El fondo ${path} no es un PNG ni un JPEG baseline (¿JPEG progresivo?); se ignora.`,
+          );
+        } catch (error) {
+          this.logger.warn(`No se pudo incrustar el fondo ${path}: ${error}`);
+        }
+      }
+    }
+
+    this.logger.warn(
+      'No se encontró assets/fondo-credencial.{png,jpg}; la credencial se genera con franjas en respaldo.',
+    );
+    return null;
   }
 
   /**
@@ -148,7 +260,9 @@ export class BadgePdfService {
         slice.map((code) =>
           QRCode.toBuffer(code, {
             type: 'png',
-            margin: 0,
+            // 2 módulos de zona de silencio + los 5 pt de placa blanca: el QR
+            // nunca roza el mapa de agua del fondo.
+            margin: 2,
             width: QR_PIXELS,
             errorCorrectionLevel: 'M',
           }),
@@ -166,16 +280,49 @@ export class BadgePdfService {
     participant: BadgeParticipant,
     fonts: FontSet,
     qrImages: Map<string, PDFImage>,
+    background: PDFImage | null,
     event: EventInfo,
     options: { cropMarks: boolean; border: boolean },
   ): void {
     const { x, y } = position;
-    const accent = roleColor(participant.role);
-    const gray600 = pdfColor('#4B5563');
-    const gray900 = pdfColor('#1F2937');
-    const gray200 = pdfColor('#E5E7EB');
+    const navy = pdfColor(CARD_NAVY);
+    const labelGray = pdfColor(LABEL_GRAY);
+    const gray200 = pdfColor(QR_PLATE_BORDER);
     const white = rgb(1, 1, 1);
     const contentWidth = CARD_WIDTH - MARGIN_SIDE * 2;
+    const centered = { x, width: CARD_WIDTH };
+
+    // Base blanca (por si el PNG lleva transparencia) bajo todo lo demás.
+    page.drawRectangle({ x, y, width: CARD_WIDTH, height: CARD_HEIGHT, color: white });
+
+    if (background) {
+      page.drawImage(background, { x, y, width: CARD_WIDTH, height: CARD_HEIGHT });
+    } else {
+      // Respaldo: franjas del color de la identidad si falta el archivo.
+      page.drawRectangle({
+        x,
+        y: y + CARD_HEIGHT - FALLBACK_HEADER,
+        width: CARD_WIDTH,
+        height: FALLBACK_HEADER,
+        color: navy,
+      });
+      page.drawRectangle({
+        x,
+        y,
+        width: CARD_WIDTH,
+        height: FALLBACK_FOOTER,
+        color: navy,
+      });
+      const eventName = toWinAnsi(event.name || 'ASMUN');
+      const eventSize = this.fitFont(eventName, fonts.bold, contentWidth, 12, 7);
+      this.drawCentered(page, eventName, {
+        ...centered,
+        y: y + CARD_HEIGHT - FALLBACK_HEADER / 2 - eventSize * 0.35,
+        size: eventSize,
+        font: fonts.bold,
+        color: white,
+      });
+    }
 
     if (options.border) {
       page.drawRectangle({
@@ -183,176 +330,115 @@ export class BadgePdfService {
         y,
         width: CARD_WIDTH,
         height: CARD_HEIGHT,
-        color: white,
         borderColor: gray200,
         borderWidth: 0.8,
       });
-      this.drawCropMarks(page, x, y);
     }
+    if (options.cropMarks) this.drawCropMarks(page, x, y);
 
-    const top = y + CARD_HEIGHT;
-
-    // Franja superior con el logo y el nombre del evento.
-    page.drawRectangle({
-      x,
-      y: top - BAND_HEIGHT,
-      width: CARD_WIDTH,
-      height: BAND_HEIGHT,
-      color: rgb(accent.r, accent.g, accent.b),
-    });
-
-    const brand = toWinAnsi('ASMUN');
-    page.drawText(brand, {
-      x: x + MARGIN_SIDE,
-      y: top - 28,
-      size: 19,
-      font: fonts.bold,
-      color: white,
-    });
-
-    const eventName = toWinAnsi(event.name || 'ASMUN');
-    const eventSize = this.fitFont(eventName, fonts.regular, CARD_WIDTH - MARGIN_SIDE * 2, 8.5, 6);
-    page.drawText(eventName, {
-      x: x + MARGIN_SIDE,
-      y: top - 40,
-      size: eventSize,
-      font: fonts.regular,
-      color: white,
-    });
-
-    const roleText = toWinAnsi(roleLabel(participant.role).toUpperCase());
-    const roleSize = this.fitFont(roleText, fonts.bold, 92, 9, 6.5);
-    page.drawText(roleText, {
-      x: x + CARD_WIDTH - MARGIN_SIDE - fonts.bold.widthOfTextAtSize(roleText, roleSize),
-      y: top - 28,
-      size: roleSize,
-      font: fonts.bold,
-      color: white,
-    });
-
-    // Bloque de identidad.
-    let cursor = top - BAND_HEIGHT - 30;
-
-    const firstName = toWinAnsi(participant.firstName);
-    const firstNameSize = this.fitFont(firstName, fonts.bold, contentWidth, 16, 11);
-    this.drawCentered(page, firstName, {
-      x,
-      width: CARD_WIDTH,
-      y: cursor,
-      size: firstNameSize,
-      font: fonts.bold,
-      color: gray900,
-    });
-
-    cursor -= 21;
-    const lastName = toWinAnsi(participant.lastName);
-    const lastNameSize = this.fitFont(lastName, fonts.bold, contentWidth, 17.5, 11);
-    this.drawCentered(page, lastName, {
-      x,
-      width: CARD_WIDTH,
-      y: cursor,
-      size: lastNameSize,
-      font: fonts.bold,
-      color: gray900,
-    });
-
-    cursor -= 20;
+    // ── Comité ──
     if (participant.committee?.name) {
       const committee = toWinAnsi(participant.committee.name);
-      const size = this.fitFont(committee, fonts.regular, contentWidth, 11.5, 8);
+      const size = this.fitFont(committee, fonts.regular, contentWidth, 12, 8);
       this.drawCentered(page, committee, {
-        x,
-        width: CARD_WIDTH,
-        y: cursor,
+        ...centered,
+        y: y + COMMITTEE_Y,
         size,
         font: fonts.regular,
-        color: gray900,
+        color: labelGray,
       });
-      cursor -= 15;
     }
 
-    if (participant.position) {
-      const position = toWinAnsi(participant.position);
-      const size = this.fitFont(position, fonts.regular, contentWidth, 10.5, 8);
-      this.drawCentered(page, position, {
-        x,
-        width: CARD_WIDTH,
-        y: cursor,
-        size,
-        font: fonts.italic,
-        color: gray600,
-      });
-      cursor -= 15;
-    }
+    // ── Nombre completo ──
+    const fullName = toWinAnsi(
+      `${participant.firstName ?? ''} ${participant.lastName ?? ''}`.trim(),
+    );
+    const nameSize = this.fitFont(fullName, fonts.bold, contentWidth, 16, 9);
+    this.drawCentered(page, fullName, {
+      ...centered,
+      y: y + NAME_Y,
+      size: nameSize,
+      font: fonts.bold,
+      color: navy,
+    });
 
+    // ── País ──
     if (participant.country) {
       const country = toWinAnsi(participant.country);
-      const size = this.fitFont(country, fonts.regular, contentWidth, 10.5, 8);
+      const size = this.fitFont(country, fonts.regular, contentWidth, 12, 8);
       this.drawCentered(page, country, {
-        x,
-        width: CARD_WIDTH,
-        y: cursor,
+        ...centered,
+        y: y + COUNTRY_Y,
         size,
         font: fonts.regular,
-        color: gray600,
-      });
-      cursor -= 15;
-    }
-
-    if (participant.school?.name) {
-      const school = toWinAnsi(participant.school.name);
-      const size = this.fitFont(school, fonts.regular, contentWidth, 10, 7);
-      this.drawCentered(page, school, {
-        x,
-        width: CARD_WIDTH,
-        y: cursor,
-        size,
-        font: fonts.regular,
-        color: gray600,
+        color: labelGray,
       });
     }
 
-    // QR y código corto.
-    const code = toWinAnsi(formatShortCode(participant.code));
-    const codeSize = 19;
-    const codeBaseline = y + FOOTER_HEIGHT + 16;
-    const qrBottom = codeBaseline + codeSize + 12;
+    // ── QR sobre placa blanca con esquinas redondeadas ──
+    const plateSize = QR_SIZE + QR_PADDING * 2;
+    const plateX = x + (CARD_WIDTH - plateSize) / 2;
+    const plateY = y + QR_BOTTOM_Y - QR_PADDING;
+    this.drawRoundedRect(page, plateX, plateY, plateSize, plateSize, QR_RADIUS, {
+      color: white,
+      borderColor: gray200,
+      borderWidth: 0.8,
+    });
+
     const qrImage = qrImages.get(participant.code);
-
     if (qrImage) {
       page.drawImage(qrImage, {
         x: x + (CARD_WIDTH - QR_SIZE) / 2,
-        y: qrBottom,
+        y: y + QR_BOTTOM_Y,
         width: QR_SIZE,
         height: QR_SIZE,
       });
     }
 
-    this.drawCentered(page, code, {
-      x,
-      width: CARD_WIDTH,
-      y: codeBaseline,
-      size: codeSize,
-      font: fonts.mono,
-      color: gray900,
-    });
+    // ── Cargo sobre la franja inferior, a la derecha del escudo ──
+    if (participant.position) {
+      const positionText = toWinAnsi(participant.position);
+      const size = this.fitFont(positionText, fonts.bold, POSITION_REGION_WIDTH, 12, 7);
+      this.drawCentered(page, positionText, {
+        x: x + POSITION_REGION_X,
+        width: POSITION_REGION_WIDTH,
+        y: y + POSITION_Y,
+        size,
+        font: fonts.bold,
+        color: white,
+      });
+    }
+  }
 
-    // Franja inferior con el color del rol (identificación visual rápida, RF-07).
-    page.drawRectangle({
-      x,
-      y,
-      width: CARD_WIDTH,
-      height: FOOTER_HEIGHT,
-      color: rgb(accent.r, accent.g, accent.b),
-    });
-    this.drawCentered(page, roleText, {
-      x,
-      width: CARD_WIDTH,
-      y: y + 9,
-      size: 10.5,
-      font: fonts.bold,
-      color: white,
-    });
+  /**
+   * Rectángulo con esquinas redondeadas vía `drawSvgPath`: pdf-lib ancla el
+   * origen en el extremo superior izquierdo e invierte el eje Y, así que el
+   * path usa coordenadas SVG (Y hacia abajo) desde esa esquina.
+   */
+  private drawRoundedRect(
+    page: PDFPage,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+    style: PlateStyle,
+  ): void {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+    const path = [
+      `M ${r} 0`,
+      `L ${width - r} 0`,
+      `Q ${width} 0 ${width} ${r}`,
+      `L ${width} ${height - r}`,
+      `Q ${width} ${height} ${width - r} ${height}`,
+      `L ${r} ${height}`,
+      `Q 0 ${height} 0 ${height - r}`,
+      `L 0 ${r}`,
+      `Q 0 0 ${r} 0`,
+      'Z',
+    ].join(' ');
+
+    page.drawSvgPath(path, { x, y: y + height, ...style });
   }
 
   /** Marcas de corte en las cuatro esquinas de la tarjeta (impresión en A4). */
