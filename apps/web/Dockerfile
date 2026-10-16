@@ -32,11 +32,6 @@ COPY apps/web ./apps/web
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# URL interna del backend: next.config.ts hornea los rewrites /api/v1/* en el
-# routes-manifest durante `next build`, así que debe llegar como build arg.
-ARG API_URL=http://api:4000
-ENV API_URL=${API_URL}
-
 # Compilación optimizada standalone
 RUN pnpm --filter @asmun/web build
 
@@ -48,6 +43,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV API_URL=http://api:4000
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
