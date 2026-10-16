@@ -2,10 +2,12 @@
 # ASMUN Control - Web Dockerfile Multi-Stage
 # ==========================================
 
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+ENV CI=true
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable && corepack prepare pnpm@11.16.0 --activate
 
 # Etapa 1: Dependencias
@@ -16,7 +18,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/api/package.json ./apps/api/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --trust-lockfile --filter @asmun/web...
 
 # Etapa 2: Compilación de Next.js
 FROM base AS builder
@@ -29,6 +31,11 @@ COPY apps/web ./apps/web
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+
+# URL interna del backend: next.config.ts hornea los rewrites /api/v1/* en el
+# routes-manifest durante `next build`, así que debe llegar como build arg.
+ARG API_URL=http://api:4000
+ENV API_URL=${API_URL}
 
 # Compilación optimizada standalone
 RUN pnpm --filter @asmun/web build

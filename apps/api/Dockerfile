@@ -2,10 +2,12 @@
 # ASMUN Control - API Dockerfile Multi-Stage
 # ==========================================
 
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+ENV CI=true
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable && corepack prepare pnpm@11.16.0 --activate
 
 # Etapa 1: Instalación y Compilación
@@ -16,9 +18,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --trust-lockfile --filter @asmun/api...
 
-COPY apps/api/tsconfig.json apps/api/nest-cli.json ./apps/api/
+COPY apps/api/tsconfig.json apps/api/tsconfig.build.json apps/api/nest-cli.json ./apps/api/
 COPY apps/api/prisma ./apps/api/prisma/
 
 RUN pnpm --filter @asmun/api prisma:generate

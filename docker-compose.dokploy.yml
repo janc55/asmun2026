@@ -52,6 +52,9 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        # Horneada en los rewrites de next.config.ts durante el build (build time).
+        API_URL: ${API_URL:-http://api:4000}
     container_name: asmun_dokploy_web
     restart: always
     depends_on:
@@ -59,7 +62,7 @@ services:
     environment:
       PORT: 3000
       NODE_ENV: production
-      API_URL: http://api:4000
+      API_URL: ${API_URL:-http://api:4000}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
     ports:
       - "3000:3000"

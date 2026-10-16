@@ -1,6 +1,10 @@
 packages:
   - 'apps/*'
 
+# Evita el pase supply-chain (651 consultas al registry) que en VPS
+# con poca RAM o red inestable aborta `pnpm install --frozen-lockfile`.
+trustLockfile: true
+
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
