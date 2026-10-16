@@ -203,6 +203,16 @@ export class ParticipantsImportService {
       column: 'Filas vacías',
       aliases: 'Las filas sin datos se ignoran. Las filas con errores se informan y no se guardan.',
     });
+    help.addRow({
+      column: 'Columnas opcionales vacías',
+      aliases:
+        'Solo Nombres y Apellidos son obligatorios. Puede dejar en blanco las columnas que no tenga (Rol, Colegio, Ciudad, Sigla…): las filas se importan igual y el rol vacío toma el valor del campo "Rol por defecto" del asistente.',
+    });
+    help.addRow({
+      column: 'Varias hojas',
+      aliases:
+        'Puede subir el archivo con esta hoja de Instrucciones: el sistema analiza la hoja que contiene la tabla de participantes y omite las de instrucciones o leyendas.',
+    });
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
@@ -281,6 +291,10 @@ export class ParticipantsImportService {
     const results: ImportRowResult[] = [];
     let created = 0;
     let possibleDuplicates = 0;
+    /** Se activa cuando el rol por defecto se aplicó al menos una vez. */
+    let usedDefaultRole = false;
+    /** Se activa cuando el colegio por defecto se aplicó al menos una vez. */
+    let usedDefaultSchool = false;
 
     const roleColumnPresent = mapping.columns.role !== undefined;
     const schoolColumnPresent = mapping.columns.school !== undefined;
@@ -310,7 +324,8 @@ export class ParticipantsImportService {
       }
 
       const rawRole = valueAt(sheetRow, 'role');
-      const rawSchool = valueAt(sheetRow, 'school') || defaultSchoolName || '';
+      const schoolFromFile = valueAt(sheetRow, 'school');
+      const rawSchool = schoolFromFile || defaultSchoolName || '';
       const rawCommittee = valueAt(sheetRow, 'committee');
       const country = valueAt(sheetRow, 'country');
       const position = valueAt(sheetRow, 'position');
@@ -323,13 +338,20 @@ export class ParticipantsImportService {
         !firstName && !lastName && !rawRole && !rawSchool && !rawCommittee && !country && !rawCode;
       if (isBlankRow) continue;
 
+      if (!schoolFromFile && defaultSchoolName) usedDefaultSchool = true;
+
       if (!firstName) errors.push('Falta el nombre.');
       if (!lastName) errors.push('Falta el apellido.');
 
       let role: ParticipantRole | null = null;
       if (roleColumnPresent) {
         if (!rawRole) {
-          errors.push('El rol está vacío.');
+          // La columna existe pero está vacía en esta fila: las listas suelen
+          // traer "Rol" en blanco. Se aplica el rol por defecto en lugar de
+          // rechazar la fila.
+          role = defaultRole;
+          usedDefaultRole = true;
+          warnings.push(`Sin rol indicado: se aplicó '${defaultRole}'.`);
         } else {
           role = parseParticipantRole(rawRole);
           if (!role) {
@@ -338,6 +360,7 @@ export class ParticipantsImportService {
         }
       } else {
         role = defaultRole;
+        usedDefaultRole = true;
       }
 
       let schoolId: number | null = null;
@@ -481,8 +504,8 @@ export class ParticipantsImportService {
         schoolsToCreate: Array.from(schoolsToCreate),
         committeesToCreate: Array.from(committeesToCreate),
         possibleDuplicates,
-        appliedDefaultRole: roleColumnPresent ? null : defaultRole,
-        appliedDefaultSchool: schoolColumnPresent ? null : defaultSchoolName,
+        appliedDefaultRole: usedDefaultRole ? defaultRole : null,
+        appliedDefaultSchool: usedDefaultSchool ? defaultSchoolName : null,
       },
       rows: results,
     };
@@ -508,7 +531,7 @@ export class ParticipantsImportService {
       });
     }
 
-    const worksheet = workbook.worksheets[0];
+    const worksheet = this.pickWorksheet(workbook);
     if (!worksheet) {
       throw new BadRequestException({
         code: 'EMPTY_FILE',
@@ -516,10 +539,16 @@ export class ParticipantsImportService {
       });
     }
 
+    return { sheetName: worksheet.name, rows: this.extractRows(worksheet) };
+  }
+
+  /** Convierte una hoja en filas de celdas; `maxRows` limita las primeras filas. */
+  private extractRows(worksheet: ExcelJS.Worksheet, maxRows?: number): SheetRow[] {
     const columnCount = Math.max(worksheet.columnCount || 0, 1);
     const rows: SheetRow[] = [];
 
     worksheet.eachRow({ includeEmpty: false }, (row) => {
+      if (maxRows !== undefined && rows.length >= maxRows) return;
       const cells: unknown[] = [];
       for (let column = 1; column <= columnCount; column += 1) {
         cells.push(row.getCell(column).value);
@@ -527,7 +556,45 @@ export class ParticipantsImportService {
       rows.push({ number: row.number, cells });
     });
 
-    return { sheetName: worksheet.name, rows };
+    return rows;
+  }
+
+  /**
+   * Elige la hoja que contiene la tabla de participantes. La plantilla y buena
+   * parte de los listados reales traen una segunda hoja de "Instrucciones" (o de
+   * leyenda); analizar esa hoja producía el error MISSING_COLUMNS aunque los datos
+   * estuvieran correctos en la otra. Se puntúa cada hoja por los encabezados que
+   * reconoce y se prefiere la de mayor puntaje.
+   */
+  private pickWorksheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet | undefined {
+    if (workbook.worksheets.length === 0) return undefined;
+    if (workbook.worksheets.length === 1) return workbook.worksheets[0];
+
+    const HELP_SHEET = /instruc|ayuda|help|readme|leyenda|diccionario|ejemplo|catalog/i;
+    const DATA_SHEET = /participant|inscrit|lista|registro|datos|delegad/i;
+
+    let best = workbook.worksheets[0];
+    let bestScore = -Infinity;
+
+    workbook.worksheets.forEach((worksheet) => {
+      const head = this.extractRows(worksheet, 10).map((row) => row.cells);
+      const headerIndex = detectHeaderRow(head);
+      const mapping = mapHeaders(head[headerIndex] ?? []);
+
+      let score = mapping.detected.length;
+      if (mapping.columns.firstName !== undefined && mapping.columns.lastName !== undefined) {
+        score += 10;
+      }
+      if (DATA_SHEET.test(worksheet.name)) score += 2;
+      if (HELP_SHEET.test(worksheet.name)) score -= 20;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = worksheet;
+      }
+    });
+
+    return best;
   }
 
   private async loadCatalogCaches() {

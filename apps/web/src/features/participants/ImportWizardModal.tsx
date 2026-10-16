@@ -168,7 +168,10 @@ export function ImportWizardModal({ open, onClose, onImported }: ImportWizardMod
           </div>
 
           <div className="space-y-4">
-            <Field label="Rol por defecto" hint="Se usa solo si el archivo no trae columna de rol">
+            <Field
+              label="Rol por defecto"
+              hint="Se usa cuando el archivo no trae la columna de rol o la deja vacía"
+            >
               <Select value={defaultRole} onChange={(event) => setDefaultRole(event.target.value)}>
                 <option value="">Delegado (predeterminado)</option>
                 {ROLE_OPTIONS.map((option) => (
@@ -179,7 +182,10 @@ export function ImportWizardModal({ open, onClose, onImported }: ImportWizardMod
               </Select>
             </Field>
 
-            <Field label="Colegio por defecto" hint="Se usa solo si el archivo no trae columna de colegio">
+            <Field
+              label="Colegio por defecto"
+              hint="Se usa cuando el archivo no trae la columna de colegio o la deja vacía"
+            >
               <Input
                 value={defaultSchoolName}
                 onChange={(event) => setDefaultSchoolName(event.target.value)}

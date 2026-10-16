@@ -24,13 +24,18 @@ class ApiClient {
 
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
-    };
+    const headers = new Headers(options.headers as HeadersInit);
+
+    // Solo se declara JSON cuando el cuerpo es JSON. Con `FormData` el
+    // `Content-Type` debe ponerlo el navegador para incluir el `boundary` del
+    // multipart; si se fuerza `application/json`, el servidor intenta parsear el
+    // archivo como JSON y responde 400 ("... is not valid JSON").
+    if (!headers.has('Content-Type') && !isFormData(options.body)) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers.set('Authorization', `Bearer ${token}`);
     }
 
     const response = await fetch(this.buildUrl(endpoint), {
@@ -154,6 +159,11 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+
+/** `true` cuando el cuerpo de la petición es un formulario multipart. */
+function isFormData(body: unknown): boolean {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
+}
 
 /** Normaliza el mensaje de error de la API (puede llegar como lista). */
 export function apiErrorMessage(error: any, fallback = 'Ocurrió un error inesperado'): string {

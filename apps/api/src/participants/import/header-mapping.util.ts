@@ -152,12 +152,37 @@ const ROLE_ALIASES: Record<string, ParticipantRole> = {
 
 /** Minúsculas, sin tildes y sin signos: `"N° Documento"` → `"ndocumento"`. */
 export function normalizeHeader(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  return String(value)
+  const text = headerText(value);
+  if (!text) return '';
+  return text
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Texto plano de una celda de encabezado. ExcelJS entrega las celdas como texto,
+ * número, fecha, fórmula o **texto enriquecido** (`{ richText: [...] }`); sin esta
+ * conversión, un encabezado con negrita parcial se leería como `[object Object]`
+ * y la columna se perdería.
+ */
+export function headerText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+
+  const candidate = value as any;
+  if (Array.isArray(candidate.richText)) {
+    return candidate.richText.map((part: any) => part?.text ?? '').join('').trim();
+  }
+  if (candidate.result !== undefined && candidate.result !== null) {
+    return String(candidate.result).trim();
+  }
+  if (typeof candidate.text === 'string') return candidate.text.trim();
+  if (candidate.formula !== undefined) return '';
+  return '';
 }
 
 /** Normaliza un nombre de persona para comparar duplicados. */
@@ -187,7 +212,7 @@ const FIELD_BY_ALIAS: Map<string, ImportField> = (() => {
 })();
 
 export function mapHeaders(headerCells: unknown[]): HeaderMapping {
-  const headers = headerCells.map((cell) => (cell === null || cell === undefined ? '' : String(cell).trim()));
+  const headers = headerCells.map((cell) => headerText(cell));
   const columns: Partial<Record<ImportField, number>> = {};
   const detected: HeaderMapping['detected'] = [];
   const unknown: HeaderMapping['unknown'] = [];
