@@ -3,6 +3,31 @@ export interface ApiError {
   message: string | string[];
 }
 
+/** Claves de almacenamiento compartidas con el contexto de autenticación. */
+export const AUTH_TOKEN_KEYS = {
+  access: 'asmun_access_token',
+  refresh: 'asmun_refresh_token',
+} as const;
+
+/**
+ * El access token vence (8 h). Cuando eso pasa ya no se puede renovar con el
+ * refresh token, el cliente borra la sesión y avisa por este evento para que el
+ * contexto de React redirija al login.
+ */
+export const SESSION_EXPIRED_EVENT = 'asmun:session-expired';
+
+const REFRESH_ENDPOINT = '/auth/refresh';
+
+/** Rutas donde un 401 son credenciales inválidas, no un token vencido. */
+const NO_REFRESH_ENDPOINTS = ['/auth/login', '/auth/refresh'];
+
+/**
+ * Renovación en curso. Varias peticiones pueden recibir 401 a la vez (por
+ * ejemplo el listado y el conteo de participantes): todas comparten una única
+ * llamada a `/auth/refresh` en lugar de disparar una por petición.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
 class ApiClient {
   private get baseUrl(): string {
     // En el navegador usa ruta relativa para beneficiarse de rewrites en Next.js o NEXT_PUBLIC_API_URL
@@ -14,7 +39,20 @@ class ApiClient {
 
   private getToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('asmun_access_token');
+    return localStorage.getItem(AUTH_TOKEN_KEYS.access);
+  }
+
+  private getRefreshToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(AUTH_TOKEN_KEYS.refresh);
+  }
+
+  /** Cabeceras con el token vigente; se reconstruyen en cada intento. */
+  private withAuthHeaders(options: RequestInit): RequestInit {
+    const headers = new Headers(options.headers as HeadersInit);
+    const token = this.getToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return { ...options, headers };
   }
 
   private buildUrl(endpoint: string): string {
@@ -22,8 +60,76 @@ class ApiClient {
     return `${this.baseUrl}${cleanEndpoint}`;
   }
 
+  /**
+   * Ejecuta la petición y, si el access token venció (401), lo renueva con el
+   * refresh token y reintenta **una sola vez**. Sin esto la sesión terminaba en
+   * cuanto expiraba el token, porque el refresh token se guardaba pero no se
+   * usaba nunca.
+   */
+  private async fetchWithAuth(endpoint: string, options: RequestInit): Promise<Response> {
+    const response = await fetch(this.buildUrl(endpoint), this.withAuthHeaders(options));
+
+    if (response.status !== 401 || this.skipsRefresh(endpoint)) return response;
+
+    const renewed = await this.refreshSession();
+    if (!renewed) {
+      this.clearSession();
+      return response;
+    }
+
+    return fetch(this.buildUrl(endpoint), this.withAuthHeaders(options));
+  }
+
+  private skipsRefresh(endpoint: string): boolean {
+    return NO_REFRESH_ENDPOINTS.some((path) => endpoint.startsWith(path));
+  }
+
+  private refreshSession(): Promise<boolean> {
+    if (!refreshInFlight) {
+      refreshInFlight = this.performRefresh().finally(() => {
+        refreshInFlight = null;
+      });
+    }
+    return refreshInFlight;
+  }
+
+  /** `POST /auth/refresh`: guarda los tokens nuevos que emite el backend. */
+  private async performRefresh(): Promise<boolean> {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) return false;
+
+    try {
+      const response = await fetch(this.buildUrl(REFRESH_ENDPOINT), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) return false;
+
+      const data = (await response.json().catch(() => null)) as
+        | { accessToken?: string; refreshToken?: string }
+        | null;
+
+      if (!data?.accessToken) return false;
+
+      localStorage.setItem(AUTH_TOKEN_KEYS.access, data.accessToken);
+      localStorage.setItem(AUTH_TOKEN_KEYS.refresh, data.refreshToken ?? refreshToken);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Borra los tokens y avisa al contexto para que vuelva al login. */
+  private clearSession(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(AUTH_TOKEN_KEYS.access);
+    localStorage.removeItem(AUTH_TOKEN_KEYS.refresh);
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
+
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken();
     const headers = new Headers(options.headers as HeadersInit);
 
     // Solo se declara JSON cuando el cuerpo es JSON. Con `FormData` el
@@ -34,14 +140,7 @@ class ApiClient {
       headers.set('Content-Type', 'application/json');
     }
 
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-
-    const response = await fetch(this.buildUrl(endpoint), {
-      ...options,
-      headers,
-    });
+    const response = await this.fetchWithAuth(endpoint, { ...options, headers });
 
     const data = await response.json().catch(() => null);
 
@@ -61,16 +160,7 @@ class ApiClient {
    * `Content-Type` para que el navegador arme el `boundary` en multipart.
    */
   async requestBlob(endpoint: string, options: RequestInit = {}): Promise<Blob> {
-    const token = this.getToken();
-    const headers: Record<string, string> = {
-      ...(options.headers as Record<string, string>),
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(this.buildUrl(endpoint), { ...options, headers });
+    const response = await this.fetchWithAuth(endpoint, options);
 
     if (!response.ok) {
       const data = await response.json().catch(() => null);
@@ -126,11 +216,7 @@ class ApiClient {
    * exportaron).
    */
   async getFile(endpoint: string): Promise<{ blob: Blob; headers: Headers }> {
-    const token = this.getToken();
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(this.buildUrl(endpoint), { method: 'GET', headers });
+    const response = await this.fetchWithAuth(endpoint, { method: 'GET' });
 
     if (!response.ok) {
       const data = await response.json().catch(() => null);

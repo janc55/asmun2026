@@ -33,9 +33,13 @@ services:
       PORT: 4000
       NODE_ENV: production
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-asmun_jwt_access_secret_super_secure_key_2026}
-      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-15m}
+      # Sesión: el access token dura una jornada de trabajo (8 h) y el cliente web
+      # lo renueva solo con el refresh token (ventana de 30 días) cuando recibe
+      # 401, así que en la práctica no se vuelve a pedir login durante el evento.
+      # Ambos valores se pueden sobrescribir desde el panel de Dokploy.
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-8h}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-asmun_jwt_refresh_secret_super_secure_key_2026}
-      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-AdminAsmun2026!}

@@ -67,6 +67,15 @@ const FALLBACK_FOOTER = 28.6;
 const COMMITTEE_Y = 228;
 const NAME_Y = 196;
 const COUNTRY_Y = 167;
+
+/**
+ * Etiquetas secundarias (comité y país): `preferred` es el tamaño que se usa
+ * cuando el texto entra en el ancho de la tarjeta y `min` el piso al que se
+ * reduce un nombre largo. Subir `min` haría que un comité muy largo se salga
+ * del ancho de la tarjeta (fitFont no garantiza el ancho por debajo del mínimo).
+ */
+const LABEL_PREFERRED_SIZE = 14;
+const LABEL_MIN_SIZE = 8;
 const QR_BOTTOM_Y = 46;
 const POSITION_Y = 10;
 
@@ -339,7 +348,7 @@ export class BadgePdfService {
     // ── Comité ──
     if (participant.committee?.name) {
       const committee = toWinAnsi(participant.committee.name);
-      const size = this.fitFont(committee, fonts.regular, contentWidth, 12, 8);
+      const size = this.fitFont(committee, fonts.regular, contentWidth, LABEL_PREFERRED_SIZE, LABEL_MIN_SIZE);
       this.drawCentered(page, committee, {
         ...centered,
         y: y + COMMITTEE_Y,
@@ -365,7 +374,7 @@ export class BadgePdfService {
     // ── País ──
     if (participant.country) {
       const country = toWinAnsi(participant.country);
-      const size = this.fitFont(country, fonts.regular, contentWidth, 12, 8);
+      const size = this.fitFont(country, fonts.regular, contentWidth, LABEL_PREFERRED_SIZE, LABEL_MIN_SIZE);
       this.drawCentered(page, country, {
         ...centered,
         y: y + COUNTRY_Y,

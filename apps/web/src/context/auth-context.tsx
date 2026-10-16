@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { api, ApiError } from '../lib/api';
+import { api, AUTH_TOKEN_KEYS, SESSION_EXPIRED_EVENT } from '../lib/api';
 
 export type UserRole = 'admin' | 'registrador' | 'operador' | 'lector';
 
@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const loadCurrentUser = useCallback(async () => {
-    const token = localStorage.getItem('asmun_access_token');
+    const token = localStorage.getItem(AUTH_TOKEN_KEYS.access);
     if (!token) {
       setUser(null);
       setIsLoading(false);
@@ -48,8 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = await api.get<User>('/auth/me');
       setUser(userData);
     } catch {
-      localStorage.removeItem('asmun_access_token');
-      localStorage.removeItem('asmun_refresh_token');
+      localStorage.removeItem(AUTH_TOKEN_KEYS.access);
+      localStorage.removeItem(AUTH_TOKEN_KEYS.refresh);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -59,6 +59,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadCurrentUser();
   }, [loadCurrentUser]);
+
+  // El cliente de API ya intentó renovar el token con el refresh token y no
+  // pudo (caducó, el usuario fue desactivado…): se cierra la sesión una sola vez.
+  useEffect(() => {
+    const handleExpired = () => {
+      setUser(null);
+      router.push('/login');
+    };
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+  }, [router]);
 
   // Protección de rutas en cliente
   useEffect(() => {
@@ -87,8 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: User;
     }>('/auth/login', { username, password });
 
-    localStorage.setItem('asmun_access_token', response.accessToken);
-    localStorage.setItem('asmun_refresh_token', response.refreshToken);
+    localStorage.setItem(AUTH_TOKEN_KEYS.access, response.accessToken);
+    localStorage.setItem(AUTH_TOKEN_KEYS.refresh, response.refreshToken);
 
     // Cargar perfil completo con checkpoints
     try {
@@ -108,8 +120,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('asmun_access_token');
-    localStorage.removeItem('asmun_refresh_token');
+    localStorage.removeItem(AUTH_TOKEN_KEYS.access);
+    localStorage.removeItem(AUTH_TOKEN_KEYS.refresh);
     setUser(null);
     router.push('/login');
   };
